@@ -1,0 +1,70 @@
+name: deploy demo app
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      
+      - name: Get access to OCIR
+        id: get-ocir
+        uses: oracle-actions/get-ocir-repository@v1.0
+        with:
+          name: ${{ secrets.OCI_DOCKER_REPO }}
+          compartment: ${{ secrets.OCI_COMPARTMENT_OCID }
+      
+      - name: Log into OCIR
+        uses: oracle-actions/login-ocir@v1.0
+        id: login-ocir
+        with:
+          auth_token: ${{ secrets.OCI_AUTH_TOKEN }}
+      
+      - name: docker build
+        id: docker-build
+        run: |
+          docker build -t ${{ secrets.OCI_DOCKER_REPO }}:${{ github.sha }}
+      
+      - name: docker push
+        id: docker-push
+        run: |
+          docker push ${{ secrets.OCI_DOCKER_REPO }}:${{ github.sha }}
+      
+      - name: Upload chart 
+        uses: actions/upload-artifact@master
+        with:
+          name: app-chart-${{ github.sha }}
+          path: chart/
+  
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Download chart
+        uses: actions/download-artifact@master
+        with:
+          name: app-chart-${{ github.sha }}
+          path: chart/
+
+      - name: Configure Kubectl
+        uses: oracle-actions/configure-kubectl-oke@v1.0
+        id: kubectl-oke-action
+        with:
+          cluster: ${{ secrets.OKE_CLUSTER_OCID }}
+      
+      - name: Helm deploy
+        id: helm-deploy
+        run: |
+          helm upgrade \
+            demo chart/ \
+            --install --wait \
+            --values chart/demo.yaml \
+            --set image.tag=${{ github.sha }} \
+            --namespace demo
+
