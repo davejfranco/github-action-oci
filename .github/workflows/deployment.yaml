@@ -36,7 +36,7 @@ jobs:
       - name: docker build
         id: docker-build
         run: |
-          docker build -t ${{ secrets.OCI_DOCKER_REPO }}:${{ github.sha }}
+          docker build -t ${{ secrets.OCI_DOCKER_REPO }}:${{ github.sha }} .
       
       - name: docker push
         id: docker-push
